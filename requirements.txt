@@ -1,0 +1,9 @@
+# Dependencias da Estacao de Controle de Missao
+# Instale com:  pip install -r requirements.txt
+
+pandas>=2.0
+openpyxl>=3.1
+fastapi>=0.110
+uvicorn[standard]>=0.27
+pydantic>=2.0
+schedule>=1.2

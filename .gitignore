@@ -1,0 +1,7 @@
+# Arquivos gerados em tempo de execucao (o robo recria todos eles)
+__pycache__/
+*.pyc
+dados/
+saida/
+logs/
+*.db

@@ -1,0 +1,14 @@
+# docker-compose.yml -- sobe a Estacao de Controle de Missao com um comando.
+#
+# Uso:  docker compose up --build
+#       depois acesse http://localhost:8000
+
+services:
+  estacao:
+    build: .
+    container_name: estacao-controle-missao
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persiste os artefatos gerados pelo robo na maquina hospedeira
+      - ./saida:/app/saida

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Estacao de Controle de Missao</title>
+  <style>
+    /*
+      ETAPA 7 -- Front-end (dashboard).
+      HTML/CSS/JS puro consumindo a API REST via Fetch, como visto na aula
+      de fundamentos web. Mostra os dados estruturados que o robo gerou.
+    */
+    :root {
+      --fundo: #0b1020;
+      --painel: #161d35;
+      --borda: #26304f;
+      --texto: #e8ecf6;
+      --suave: #8c96b3;
+      --acento: #4f8cff;
+      --ok: #2ecc71;
+      --atencao: #f1c40f;
+      --critico: #ff5566;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      background: radial-gradient(circle at 20% -10%, #1a2347 0%, var(--fundo) 55%);
+      color: var(--texto);
+      min-height: 100vh;
+      padding: 32px;
+    }
+    header { margin-bottom: 28px; }
+    header h1 { font-size: 26px; letter-spacing: 0.5px; }
+    header p { color: var(--suave); margin-top: 6px; font-size: 14px; }
+    .grade {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .cartao {
+      background: var(--painel);
+      border: 1px solid var(--borda);
+      border-radius: 12px;
+      padding: 18px 20px;
+    }
+    .cartao .rotulo {
+      color: var(--suave);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .cartao .valor { font-size: 30px; font-weight: 700; margin-top: 8px; }
+    .selo {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+    .NOMINAL { background: rgba(46,204,113,.15); color: var(--ok); }
+    .ATENCAO { background: rgba(241,196,15,.15); color: var(--atencao); }
+    .CRITICO { background: rgba(255,85,102,.15); color: var(--critico); }
+    section {
+      background: var(--painel);
+      border: 1px solid var(--borda);
+      border-radius: 12px;
+      padding: 20px 22px;
+      margin-bottom: 22px;
+    }
+    section h2 { font-size: 17px; margin-bottom: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--borda); }
+    th { color: var(--suave); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+    .sev-CRITICA { color: var(--critico); font-weight: 700; }
+    .sev-ALTA { color: var(--atencao); font-weight: 600; }
+    .sev-MEDIA { color: var(--acento); }
+    .barra-linha { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; }
+    .barra-rotulo { width: 90px; color: var(--suave); font-size: 13px; }
+    .barra { flex: 1; height: 14px; background: #0d1430; border-radius: 7px; overflow: hidden; }
+    .barra > div { height: 100%; background: var(--acento); }
+    .barra-valor { width: 40px; text-align: right; font-size: 13px; }
+    footer { color: var(--suave); font-size: 12px; text-align: center; margin-top: 10px; }
+    .erro { color: var(--critico); }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🛰️ Estacao de Controle de Missao</h1>
+    <p>Painel de telemetria e anomalias &mdash; dados servidos pela API do robo RPA</p>
+  </header>
+
+  <div class="grade" id="cartoes">
+    <div class="cartao"><div class="rotulo">Carregando...</div></div>
+  </div>
+
+  <section>
+    <h2>Logs de bordo por severidade</h2>
+    <div id="logs"></div>
+  </section>
+
+  <section>
+    <h2>Anomalias detectadas (amostra)</h2>
+    <div id="anomalias"></div>
+  </section>
+
+  <footer id="rodape"></footer>
+
+  <script>
+    // URL base da API. Como o front e a API sao servidos juntos, usamos
+    // caminho relativo ("" = mesma origem).
+    const API = "";
+
+    async function buscar(rota) {
+      const resp = await fetch(API + rota);
+      if (!resp.ok) throw new Error("Falha ao buscar " + rota);
+      return resp.json();
+    }
+
+    function renderResumo(r) {
+      const cartoes = [
+        { rotulo: "Missao", valor: r.missao_id },
+        { rotulo: "Leituras", valor: r.total_leituras.toLocaleString("pt-BR") },
+        { rotulo: "Anomalias", valor: r.total_anomalias },
+        { rotulo: "Anomalias criticas", valor: r.anomalias_criticas },
+        { rotulo: "Indice de saude", valor: r.indice_saude + " / 100" },
+      ];
+      let html = cartoes.map(c =>
+        `<div class="cartao"><div class="rotulo">${c.rotulo}</div>
+         <div class="valor">${c.valor}</div></div>`).join("");
+      html += `<div class="cartao"><div class="rotulo">Status</div>
+        <span class="selo ${r.status_missao}">${r.status_missao}</span></div>`;
+      document.getElementById("cartoes").innerHTML = html;
+    }
+
+    function renderLogs(linhas) {
+      const total = linhas.reduce((s, l) => s + l.quantidade, 0) || 1;
+      const cores = { INFO: "#4f8cff", WARNING: "#f1c40f", ERROR: "#ff9f43", CRITICAL: "#ff5566" };
+      document.getElementById("logs").innerHTML = linhas.map(l => {
+        const pct = (l.quantidade / total * 100).toFixed(1);
+        const cor = cores[l.nivel] || "#4f8cff";
+        return `<div class="barra-linha">
+          <div class="barra-rotulo">${l.nivel}</div>
+          <div class="barra"><div style="width:${pct}%;background:${cor}"></div></div>
+          <div class="barra-valor">${l.quantidade}</div></div>`;
+      }).join("");
+    }
+
+    function renderAnomalias(linhas) {
+      if (!linhas.length) {
+        document.getElementById("anomalias").innerHTML = "<p>Nenhuma anomalia.</p>";
+        return;
+      }
+      const corpo = linhas.slice(0, 15).map(a => `<tr>
+        <td>${a.timestamp}</td>
+        <td>${a.parametro}</td>
+        <td>${a.valor} ${a.unidade}</td>
+        <td>${a.z_score}</td>
+        <td>${a.metodo}</td>
+        <td class="sev-${a.severidade}">${a.severidade}</td>
+      </tr>`).join("");
+      document.getElementById("anomalias").innerHTML = `<table>
+        <thead><tr><th>Horario</th><th>Parametro</th><th>Valor</th>
+        <th>Z-score</th><th>Metodo</th><th>Severidade</th></tr></thead>
+        <tbody>${corpo}</tbody></table>`;
+    }
+
+    async function iniciar() {
+      try {
+        const [resumo, logs, anomalias] = await Promise.all([
+          buscar("/resumo"),
+          buscar("/logs/niveis"),
+          buscar("/anomalias?limite=15"),
+        ]);
+        renderResumo(resumo);
+        renderLogs(logs);
+        renderAnomalias(anomalias);
+        document.getElementById("rodape").textContent =
+          "Dados atualizados a partir do banco da missao.";
+      } catch (e) {
+        document.getElementById("cartoes").innerHTML =
+          `<div class="cartao"><div class="rotulo erro">Erro ao carregar.
+           Rode o robo (python robo.py) e a API (python api.py).</div></div>`;
+      }
+    }
+
+    iniciar();
+  </script>
+</body>
+</html>
