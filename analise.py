@@ -27,6 +27,34 @@ logger = logging.getLogger("estacao.analise")
 # Severidade numerica de cada nivel de log (para calcular indice de saude)
 PESO_NIVEL = {"INFO": 0, "WARNING": 1, "ERROR": 3, "CRITICAL": 5}
 
+# Dicionario de temas para a classificacao NLP (por palavras-chave) das
+# mensagens de log. E' uma abordagem simples de processamento de linguagem
+# natural: normaliza o texto e o associa a um tema tecnico pela ocorrencia de
+# termos caracteristicos, agregando o "assunto" recorrente da missao.
+TEMAS_LOG = {
+    "ENERGIA": ["bateria", "energia", "solar", "consumo", "painel"],
+    "TERMICO": ["temperatura", "termico", "modulo", "calor"],
+    "COMUNICACAO": ["sinal", "comunicacao", "transmissao", "pacote", "telemetria"],
+    "NAVEGACAO": ["rota", "atitude", "desvio", "controle", "orientado"],
+    "RADIACAO": ["radiacao", "pico"],
+    "MANUTENCAO": ["sensor", "reinicializacao", "subsistema", "falha",
+                   "checagem", "rotina", "sincronizacao", "relogio"],
+}
+
+
+def classificar_mensagem(mensagem):
+    """
+    Classifica uma mensagem de log em um tema tecnico (NLP por palavras-chave).
+
+    Normaliza o texto (minusculas) e devolve o primeiro tema cujo termo
+    caracteristico aparece na mensagem; 'OUTROS' se nenhum casar.
+    """
+    texto = str(mensagem).lower()
+    for tema, termos in TEMAS_LOG.items():
+        if any(termo in texto for termo in termos):
+            return tema
+    return "OUTROS"
+
 
 def detectar_anomalias(df_telemetria):
     """
@@ -99,44 +127,58 @@ def classificar_logs(df_logs):
     Devolve um dicionario com:
       * por_nivel       -> contagem por severidade
       * por_subsistema  -> contagem por subsistema
+      * por_tema        -> contagem por tema (classificacao NLP das mensagens)
       * eventos_criticos-> lista dos logs ERROR/CRITICAL
     """
     if df_logs.empty:
         logger.warning("Nenhum log para classificar.")
-        return {"por_nivel": {}, "por_subsistema": {}, "eventos_criticos": []}
+        return {"por_nivel": {}, "por_subsistema": {},
+                "por_tema": {}, "eventos_criticos": []}
 
     por_nivel = df_logs["nivel"].value_counts().to_dict()
     por_subsistema = df_logs["subsistema"].value_counts().to_dict()
 
+    # Classificacao NLP por palavras-chave: agrega o "assunto" das mensagens
+    temas = df_logs["mensagem"].apply(classificar_mensagem)
+    por_tema = temas.value_counts().to_dict()
+
     criticos = df_logs[df_logs["nivel"].isin(["ERROR", "CRITICAL"])]
     eventos_criticos = criticos.to_dict(orient="records")
 
-    logger.info("Logs classificados: %d eventos criticos (ERROR/CRITICAL).",
-                len(eventos_criticos))
+    logger.info("Logs classificados: %d eventos criticos (ERROR/CRITICAL); "
+                "temas predominantes: %s.",
+                len(eventos_criticos),
+                ", ".join(list(por_tema)[:3]) or "-")
     return {
         "por_nivel": por_nivel,
         "por_subsistema": por_subsistema,
+        "por_tema": por_tema,
         "eventos_criticos": eventos_criticos,
     }
 
 
-def calcular_indice_saude(df_logs, df_anomalias, total_leituras):
+def indice_saude(contagem_niveis, total_anomalias, total_leituras):
     """
-    Calcula um 'indice de saude' da missao de 0 a 100.
+    Funcao CANONICA do indice de saude (0 a 100).
+
+    Recebe apenas valores primitivos (uma contagem de logs por nivel e os
+    totais de anomalias/leituras) justamente para poder ser reutilizada tanto
+    pelo robo (a partir dos DataFrames) quanto pela API (a partir do banco),
+    garantindo que os dois calculem o indice EXATAMENTE da mesma forma.
 
     Parte de 100 e penaliza conforme a gravidade dos logs e a proporcao de
     anomalias na telemetria. E' um indicador acionavel para o controle.
     """
     indice = 100.0
 
-    # Penalidade pelos logs, ponderada pela severidade
-    if not df_logs.empty:
-        penalidade_logs = sum(PESO_NIVEL.get(n, 0) for n in df_logs["nivel"])
-        indice -= min(40.0, penalidade_logs * 0.3)
+    # Penalidade pelos logs, ponderada pela severidade de cada nivel
+    penalidade_logs = sum(PESO_NIVEL.get(nivel, 0) * qtd
+                          for nivel, qtd in contagem_niveis.items())
+    indice -= min(40.0, penalidade_logs * 0.3)
 
     # Penalidade pela proporcao de anomalias na telemetria
-    if total_leituras > 0 and not df_anomalias.empty:
-        proporcao = len(df_anomalias) / total_leituras
+    if total_leituras > 0 and total_anomalias > 0:
+        proporcao = total_anomalias / total_leituras
         indice -= min(40.0, proporcao * 100 * 2)
 
     indice = max(0.0, round(indice, 1))
@@ -148,6 +190,22 @@ def calcular_indice_saude(df_logs, df_anomalias, total_leituras):
     else:
         status = "CRITICO"
 
+    return indice, status
+
+
+def calcular_indice_saude(df_logs, df_anomalias, total_leituras):
+    """
+    Calcula o indice de saude a partir dos DataFrames do robo.
+
+    E' um envelope fino sobre 'indice_saude': extrai a contagem de logs por
+    nivel e delega o calculo para a funcao canonica.
+    """
+    contagem_niveis = (
+        df_logs["nivel"].value_counts().to_dict() if not df_logs.empty else {}
+    )
+    indice, status = indice_saude(
+        contagem_niveis, len(df_anomalias), total_leituras
+    )
     logger.info("Indice de saude da missao: %.1f (%s).", indice, status)
     return indice, status
 

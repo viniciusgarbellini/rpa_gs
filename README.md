@@ -22,7 +22,7 @@ inteligencia acionavel**, sem intervencao humana.
 [2] Le e estrutura (pandas)→ DataFrames limpos e validados      (processador.py)
         ↓
 [3] Analise inteligente    → anomalias (z-score + limites) +    (analise.py)
-                             classificacao de logs + indice de saude
+                             classificacao NLP de logs + indice de saude
         ↓
 [4] Carga no banco (SQLite)→ tabelas: telemetria, anomalias, logs (banco.py)
         ↓
@@ -86,6 +86,7 @@ docker compose up --build
 | Manipulacao de arquivos (CSV/TXT) | `gerador_dados.py`, `processador.py` |
 | Analise de dados com **pandas** | `processador.py`, `analise.py` |
 | Algoritmos de analise (anomalias) | `analise.py` |
+| **NLP** (classificacao de logs por tema) | `analise.py` |
 | Banco de dados com **sqlite3** | `banco.py`, `model.py` |
 | **API REST** (FastAPI + Pydantic, MVC) | `api.py`, `model.py` |
 | Front-end web (HTML/CSS/JS + Fetch) | `frontend/index.html` |
@@ -102,7 +103,7 @@ docker compose up --build
 |-----------------|------------------|
 | **Dominio Tecnico e Integracao (40%)** | Pipeline RPA funcional que integra 6+ topicos do semestre num fluxo unico de ponta a ponta. |
 | **Arquitetura de Fluxo e Eng. de Software (25%)** | Codigo modular (1 modulo por etapa), orquestrador central, `try/except` e `logging` em todas as etapas, codigos de saida para automacao. |
-| **Inteligencia de Dados e IA (20%)** | Algoritmos de analise: deteccao de anomalias por **z-score** (estatistico) + **limites de engenharia**, classificacao de logs por severidade e **indice de saude** da missao. |
+| **Inteligencia de Dados e IA (20%)** | Algoritmos de analise: deteccao de anomalias por **z-score** (estatistico) + **limites de engenharia**, **NLP** (classificacao das mensagens de log por tema), classificacao por severidade e **indice de saude** da missao (calculo unificado entre robo e API). |
 | **Entrega de Artefatos e Outputs (15%)** | Planilha Excel com 5 abas, relatorio Markdown consolidado, banco SQLite estruturado e **carga de dados para o front-end** via API. |
 
 ---

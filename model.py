@@ -12,6 +12,7 @@ import sqlite3
 
 from pydantic import BaseModel
 
+import analise
 import config
 
 
@@ -72,15 +73,20 @@ class Repository:
                 "SELECT COUNT(*) FROM logs_bordo WHERE nivel IN (?, ?)",
                 ("ERROR", "CRITICAL"),
             ).fetchone()[0]
+            # Contagem por nivel: alimenta o calculo canonico do indice de saude
+            contagem_niveis = dict(cur.execute(
+                "SELECT nivel, COUNT(*) FROM logs_bordo GROUP BY nivel"
+            ).fetchall())
             missao = cur.execute(
                 "SELECT missao_id FROM telemetria LIMIT 1"
             ).fetchone()
         finally:
             conexao.close()
 
-        # Reaproveita o mesmo calculo de indice de saude usado pelo robo
-        indice, status = self._calcular_saude(
-            total_leituras, total_anomalias, eventos_log
+        # Usa a MESMA funcao canonica do robo (analise.indice_saude), garantindo
+        # que API e robo nunca divirjam no calculo do indice de saude.
+        indice, status = analise.indice_saude(
+            contagem_niveis, total_anomalias, total_leituras
         )
         return {
             "missao_id": missao[0] if missao else config.MISSAO_ID,
@@ -91,22 +97,6 @@ class Repository:
             "indice_saude": indice,
             "status_missao": status,
         }
-
-    @staticmethod
-    def _calcular_saude(total_leituras, total_anomalias, eventos_log):
-        indice = 100.0
-        indice -= min(40.0, eventos_log * 0.9)
-        if total_leituras > 0:
-            proporcao = total_anomalias / total_leituras
-            indice -= min(40.0, proporcao * 100 * 2)
-        indice = max(0.0, round(indice, 1))
-        if indice >= 80:
-            status = "NOMINAL"
-        elif indice >= 50:
-            status = "ATENCAO"
-        else:
-            status = "CRITICO"
-        return indice, status
 
     def listar_anomalias(self, limite=100, severidade=None):
         """Lista anomalias, com filtro opcional por severidade."""
@@ -157,3 +147,25 @@ class Repository:
         finally:
             conexao.close()
         return [dict(linha) for linha in linhas]
+
+    def logs_por_tema(self):
+        """
+        Classifica as mensagens de log por tema (NLP por palavras-chave) e
+        devolve a contagem de cada tema, do mais frequente ao menos.
+        """
+        conexao = self._conectar()
+        try:
+            cur = conexao.cursor()
+            mensagens = cur.execute(
+                "SELECT mensagem FROM logs_bordo"
+            ).fetchall()
+        finally:
+            conexao.close()
+
+        contagem = {}
+        for (mensagem,) in mensagens:
+            tema = analise.classificar_mensagem(mensagem)
+            contagem[tema] = contagem.get(tema, 0) + 1
+
+        ordenado = sorted(contagem.items(), key=lambda par: par[1], reverse=True)
+        return [{"tema": tema, "quantidade": qtd} for tema, qtd in ordenado]

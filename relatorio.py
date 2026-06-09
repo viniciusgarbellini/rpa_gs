@@ -126,6 +126,18 @@ def gerar_markdown(df_anomalias, classificacao, resumo):
         linhas.append("Nenhum log registrado.")
     linhas.append("")
 
+    # Temas recorrentes (classificacao NLP por palavras-chave)
+    linhas.append("## Temas Recorrentes nos Logs (NLP)")
+    linhas.append("")
+    if classificacao.get("por_tema"):
+        linhas.append("| Tema | Mensagens |")
+        linhas.append("|------|-----------|")
+        for tema, qtd in classificacao["por_tema"].items():
+            linhas.append(f"| {tema} | {qtd} |")
+    else:
+        linhas.append("Nenhum log para classificar.")
+    linhas.append("")
+
     conteudo = "\n".join(linhas)
     try:
         with open(config.ARQ_RELATORIO_MD, "w", encoding="utf-8") as arq:

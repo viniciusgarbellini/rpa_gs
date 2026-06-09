@@ -23,7 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import RedirectResponse
 
 import config
-from model import Repository
+from model import Anomalia, Repository, Resumo
 
 logger = logging.getLogger("estacao.api")
 
@@ -51,7 +51,7 @@ def raiz_api():
     return RedirectResponse(url="/docs")
 
 
-@app.get("/resumo", tags=["Missao"])
+@app.get("/resumo", tags=["Missao"], response_model=Resumo)
 def obter_resumo():
     """Indicadores principais da missao (status, indice de saude, totais)."""
     try:
@@ -62,7 +62,7 @@ def obter_resumo():
                             detail="Banco indisponivel. Rode o robo primeiro.")
 
 
-@app.get("/anomalias", tags=["Analise"])
+@app.get("/anomalias", tags=["Analise"], response_model=list[Anomalia])
 def obter_anomalias(limite: int = 100, severidade: str | None = None):
     """Lista as anomalias detectadas (filtro opcional por severidade)."""
     try:
@@ -91,6 +91,17 @@ def obter_logs_por_nivel():
         return repositorio.logs_por_nivel()
     except Exception as erro:
         logger.error("Erro ao agrupar logs: %s", erro)
+        raise HTTPException(status_code=500,
+                            detail="Banco indisponivel. Rode o robo primeiro.")
+
+
+@app.get("/logs/temas", tags=["Analise"])
+def obter_logs_por_tema():
+    """Temas recorrentes nas mensagens de log (classificacao NLP)."""
+    try:
+        return repositorio.logs_por_tema()
+    except Exception as erro:
+        logger.error("Erro ao classificar temas: %s", erro)
         raise HTTPException(status_code=500,
                             detail="Banco indisponivel. Rode o robo primeiro.")
 

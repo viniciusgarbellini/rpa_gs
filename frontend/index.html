@@ -101,6 +101,11 @@
   </section>
 
   <section>
+    <h2>Temas recorrentes nos logs <span style="color:var(--suave);font-size:13px;font-weight:400">(classificacao NLP)</span></h2>
+    <div id="temas"></div>
+  </section>
+
+  <section>
     <h2>Anomalias detectadas (amostra)</h2>
     <div id="anomalias"></div>
   </section>
@@ -147,6 +152,21 @@
       }).join("");
     }
 
+    function renderTemas(linhas) {
+      if (!linhas.length) {
+        document.getElementById("temas").innerHTML = "<p>Sem logs para classificar.</p>";
+        return;
+      }
+      const total = linhas.reduce((s, l) => s + l.quantidade, 0) || 1;
+      document.getElementById("temas").innerHTML = linhas.map(l => {
+        const pct = (l.quantidade / total * 100).toFixed(1);
+        return `<div class="barra-linha">
+          <div class="barra-rotulo">${l.tema}</div>
+          <div class="barra"><div style="width:${pct}%"></div></div>
+          <div class="barra-valor">${l.quantidade}</div></div>`;
+      }).join("");
+    }
+
     function renderAnomalias(linhas) {
       if (!linhas.length) {
         document.getElementById("anomalias").innerHTML = "<p>Nenhuma anomalia.</p>";
@@ -168,13 +188,15 @@
 
     async function iniciar() {
       try {
-        const [resumo, logs, anomalias] = await Promise.all([
+        const [resumo, logs, temas, anomalias] = await Promise.all([
           buscar("/resumo"),
           buscar("/logs/niveis"),
+          buscar("/logs/temas"),
           buscar("/anomalias?limite=15"),
         ]);
         renderResumo(resumo);
         renderLogs(logs);
+        renderTemas(temas);
         renderAnomalias(anomalias);
         document.getElementById("rodape").textContent =
           "Dados atualizados a partir do banco da missao.";
